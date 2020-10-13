@@ -1,0 +1,317 @@
+from flask import Flask, request, abort
+
+from linebot import (
+    LineBotApi, WebhookHandler
+)
+from linebot.exceptions import (
+    InvalidSignatureError
+)
+from linebot.models import *
+
+app = Flask(__name__)
+
+# Channel Access Token
+line_bot_api = LineBotApi('your line api')
+# Channel Secret
+handler = WebhookHandler('fd0697f28baf7b905d505eed2d5a8593')
+
+# 監聽所有來自 /callback 的 Post Request
+@app.route("/callback", methods=['POST'])
+def callback():
+    # get X-Line-Signature header value
+    signature = request.headers['X-Line-Signature']
+    # get request body as text
+    body = request.get_data(as_text=True)
+    app.logger.info("Request body: " + body)
+    # handle webhook body
+    try:
+        handler.handle(body, signature)
+    except InvalidSignatureError:
+        abort(400)
+    return 'OK'
+def Get_teamgrade():
+    a = ""
+    urlCVE = "http://www.cpbl.com.tw/standing/season.html"
+    res = requests.get(urlCVE)
+    sp = BeautifulSoup(res.text, 'html.parser')
+    Descriptiontest = sp.select(".std_tb.mix_x td")
+    a += "隊名" + " " + " W" + " T" + " L" + "\n"
+    for i in range(4):
+        a += Descriptiontest[1 + i * 15].text + ":" + Descriptiontest[3 + i * 15].text + "\n"
+    return a.replace("\r\n\t\t\t\t\t\t\t", "").replace("\r\n\t\t\t\t\t\t", "").replace(
+        "                            ", "").replace("統一7-ELEVEn", "統一").replace("中信兄弟", "中信")
+def Get_checkdate(date):
+    a = ""
+    urlCVE = "http://www.cpbl.com.tw/games/play_by_play.html?&game_type=01&game_date=2020-"+date+"&pbyear=2020"
+    res = requests.get(urlCVE)
+    sp = BeautifulSoup(res.text, 'html.parser')
+    Descriptiontest = sp.select(".date_pick .game a")
+    if Descriptiontest[0].text.replace('\n', '').replace("\r", "").replace("\t", "") == "G":
+        return a
+    else:
+        for i in range(len(Descriptiontest)):
+            a += "http://www.cpbl.com.tw" + Descriptiontest[i]['href'] + "\n"
+        return a
+def Get_gamename(date):
+    a=""
+    urlCVE="http://www.cpbl.com.tw/games/play_by_play.html?&game_type=01&game_date=2020-"+date+"&pbyear=2020"
+    res=requests.get(urlCVE)
+    sp=BeautifulSoup(res.text,'html.parser')
+    Descriptiontest = sp.select(".date_pick .game a img")
+    for i in range(len(Descriptiontest)):
+        Descriptiontest[i]=Descriptiontest[i]['src'].split("team/")[1].split("_")[0]
+        if Descriptiontest[i]=="L01":
+            Descriptiontest[i]="統一獅"
+        elif Descriptiontest[i]=="AJL011":
+            Descriptiontest[i]="樂天"
+        elif Descriptiontest[i]=="B04":
+            Descriptiontest[i]="富邦"
+        elif Descriptiontest[i]=="E02":
+            Descriptiontest[i]="中信兄弟"
+        a+=Descriptiontest[i]+"\n"
+    return a
+def Get_gamedetail(gameurl):
+    a=""
+    res=requests.get(gameurl)
+    sp=BeautifulSoup(res.text,'html.parser')
+    Descriptiontest = sp.select(".std_tb.mix_line.gap_t10.overwrite_size_15")
+
+    for i in range(len(Descriptiontest)):
+        a+=Descriptiontest[i].text+'\n'
+    if a=="\n\n":
+        a="比賽尚未開始"
+        return a
+    else:
+        return a.replace('\xa0',"").replace("\n\n\n",'\n').replace("\n\n\n",'\n').replace(".\n",".").replace("\nRakuten",'Rakuten').replace("\n\n1上","1上").replace("上\n","上").replace("下\n","下").replace("1下","1下\n").replace("1上","1上\n")
+def Get_playerdetail(playername):
+    Descriptiontest=""
+    a=""
+    player=[]
+    count=0
+    for page in range(1,6):
+        urlCVE="http://www.cpbl.com.tw/stats/all.html?year=2020&game_type=01&stat=pbat&online=0&sort=HIT&order=desc&per_page="+str(page)
+        res=requests.get(urlCVE)
+        sp=BeautifulSoup(res.text,'html.parser')
+        Descriptiontest = sp.select(".gap_b20 td")
+        count+=int(len(Descriptiontest))
+        for i in range(len(Descriptiontest)):
+            player.append(Descriptiontest[i].text.replace(' ',""))
+    aaa = "林立"
+    title = ["Number:", 'NAME(名字):', "G(出賽數):", "PA(打席):", "AB(打數):", "RBI(打點):", "R(得分):", "H(安打):", "1B(一壘安打):",
+             "2B(二壘安打):", "3B(三壘安打):", "HR(全壘打):", "TB(壘打數):", "SO(被三振):", "SB(盜壘):", "OBP(上壘率):", "SLG(長打率):",
+             "AVG(打擊率):", "GIDP(雙殺打):", "SAC(犧牲短打):", "SF(犧牲飛球):", "BB(四壞球):", "IBB(故意四壞):", "HBP(死球):", "CS(盜壘刺):",
+             "GO(滾地出局):", "AO(高飛出局):", "G/F(滾飛出局比):", "SB%(盜壘率):", "TA(攻擊指數):", "SSA(銀棒指數):"]
+    c = []
+    for i in range(1, count + 1, +31):
+        if player[i]==playername:
+            for j in range(i, i + 30):
+                c.append(player[j])
+    for i in range(len(c)):
+        a+=title[i + 1] + c[i]+"\n"
+
+    return a
+# 處理訊息
+@handler.add(MessageEvent, message=TextMessage)
+def handle_message(event):
+    # 球隊戰績
+
+
+    a=""
+    if event.message.text=="球隊戰績":
+        a+=Get_teamgrade()
+        message = TextSendMessage(text=a)
+        line_bot_api.reply_message(event.reply_token, message)
+    elif event.message.text.split(":")[0]=="詳細內容":
+        gamedetail=""
+        gamedetail+=Get_gamedetail(event.message.text.replace("詳細內容:",""))
+        message = TextSendMessage(text=gamedetail)
+        line_bot_api.reply_message(event.reply_token, message)
+    elif event.message.text.split(":")[0]=="選手成績":
+        playerdetail=""
+        playerdetail+=Get_playerdetail(event.message.text.split(":")[1])
+        message = TextSendMessage(text=playerdetail)
+        line_bot_api.reply_message(event.reply_token, message)
+    elif event.message.text=="今日比賽":
+        a = str(datetime.date.today()).replace("2020-", "")
+        game = ""
+        game += Get_checkdate(a)
+        gamelink = []
+        if game == "":
+            message = TextSendMessage(text="沒有比賽")
+            line_bot_api.reply_message(event.reply_token, message)
+        elif len(game.split("\n")) == 3:
+            for i in range(len(game.split("\n"))):
+                gamelink.append(game.split("\n")[i])
+            gamename = ""
+            gamename += Get_gamename(a)
+            gamename.split("\n")
+            message = TemplateSendMessage(
+                alt_text='確認樣板',
+                template=ButtonsTemplate(
+                    title="選擇比賽",
+                    text="你想看哪個比賽?",
+                    actions=[
+                        MessageTemplateAction(
+                            label=gamename.split("\n")[0] + "VS" + gamename.split("\n")[1],
+                            text="詳細內容:" + game.split("\n")[0]
+                        ),
+                        MessageTemplateAction(
+                            label=gamename.split("\n")[2] + "VS" + gamename.split("\n")[3],
+                            text="詳細內容:" + game.split("\n")[1]
+                        )
+                    ]
+                )
+            )
+
+            line_bot_api.reply_message(event.reply_token, message)
+        elif len(game.split("\n")) == 2:
+            for i in range(len(game.split("\n"))):
+                gamelink.append(game.split("\n")[i])
+            gamename = ""
+            gamename += Get_gamename(a)
+            gamename.split("\n")
+            message = TemplateSendMessage(
+                alt_text='確認樣板',
+                template=ButtonsTemplate(
+                    title="選擇比賽",
+                    text="你想看哪個比賽?",
+                    actions=[
+                        MessageTemplateAction(
+                            label=gamename.split("\n")[0] + "VS" + gamename.split("\n")[1],
+                            text="詳細內容:" + game.split("\n")[0]
+                        )
+
+                    ]
+                )
+            )
+            line_bot_api.reply_message(event.reply_token, message)
+
+    elif event.message.text=="操作說明":
+        a=""
+        a+="查詢比賽，請這樣搜尋:"+"\n"+"比賽:日期(例如 比賽:10-01)"+"\n"+"查詢選手成績，請這樣搜尋:"+"\n"+"選手成績:人名(例如: 選手成績:林立)"+"\n"
+        message = TextSendMessage(text=a)
+        line_bot_api.reply_message(event.reply_token, message)
+    elif event.message.text.split(":")[0]=="比賽":
+        game=""
+        game+=Get_checkdate(event.message.text.split(":")[1])
+        gamelink=[]
+        if game=="":
+            message = TextSendMessage(text="沒有比賽")
+            line_bot_api.reply_message(event.reply_token, message)
+        elif len(game.split("\n"))==3:
+            for i in range(len(game.split("\n"))):
+                gamelink.append(game.split("\n")[i])
+            gamename=""
+            gamename+=Get_gamename(event.message.text.split(":")[1])
+            gamename.split("\n")
+            message = TemplateSendMessage(
+                alt_text='確認樣板',
+                template=ButtonsTemplate(
+                    title="選擇比賽",
+                    text="你想看哪個比賽?",
+                    actions=[
+                        MessageTemplateAction(
+                            label=gamename.split("\n")[0] + "VS" + gamename.split("\n")[1],
+                            text="詳細內容:"+game.split("\n")[0]
+                        ),
+                        MessageTemplateAction(
+                            label=gamename.split("\n")[2] + "VS" + gamename.split("\n")[3],
+                            text="詳細內容:"+game.split("\n")[1]
+                        )
+                    ]
+                )
+            )
+
+            line_bot_api.reply_message(event.reply_token, message)
+        elif len(game.split("\n"))==2:
+            for i in range(len(game.split("\n"))):
+                gamelink.append(game.split("\n")[i])
+            gamename=""
+            gamename+=Get_gamename(event.message.text.split(":")[1])
+            gamename.split("\n")
+            message = TemplateSendMessage(
+                alt_text='確認樣板',
+                template=ButtonsTemplate(
+                    title="選擇比賽",
+                    text="你想看哪個比賽?",
+                    actions=[
+                        MessageTemplateAction(
+                            label=gamename.split("\n")[0] + "VS" + gamename.split("\n")[1],
+                            text="詳細內容:"+game.split("\n")[0]
+                        )
+
+                    ]
+                )
+            )
+            line_bot_api.reply_message(event.reply_token, message)
+    elif event.message.text.split("：")[0]=="詳細內容":
+        gamedetail=""
+        gamedetail+=Get_gamedetail(event.message.text.replace("詳細內容：",""))
+        message = TextSendMessage(text=gamedetail)
+        line_bot_api.reply_message(event.reply_token, message)
+    elif event.message.text.split("：")[0]=="選手成績":
+        playerdetail=""
+        playerdetail+=Get_playerdetail(event.message.text.split("：")[1])
+        message = TextSendMessage(text=playerdetail)
+        line_bot_api.reply_message(event.reply_token, message)
+
+    elif event.message.text.split("：")[0]=="比賽":
+        game=""
+        game+=Get_checkdate(event.message.text.split("：")[1])
+        gamelink=[]
+        if game=="":
+            message = TextSendMessage(text="沒有比賽")
+            line_bot_api.reply_message(event.reply_token, message)
+        elif len(game.split("\n"))==3:
+            for i in range(len(game.split("\n"))):
+                gamelink.append(game.split("\n")[i])
+            gamename=""
+            gamename+=Get_gamename(event.message.text.split("：")[1])
+            gamename.split("\n")
+            message = TemplateSendMessage(
+                alt_text='確認樣板',
+                template=ButtonsTemplate(
+                    title="選擇比賽",
+                    text="你想看哪個比賽?",
+                    actions=[
+                        MessageTemplateAction(
+                            label=gamename.split("\n")[0] + "VS" + gamename.split("\n")[1],
+                            text="詳細內容:"+game.split("\n")[0]
+                        ),
+                        MessageTemplateAction(
+                            label=gamename.split("\n")[2] + "VS" + gamename.split("\n")[3],
+                            text="詳細內容:"+game.split("\n")[1]
+                        )
+                    ]
+                )
+            )
+
+            line_bot_api.reply_message(event.reply_token, message)
+        elif len(game.split("\n"))==2:
+            for i in range(len(game.split("\n"))):
+                gamelink.append(game.split("\n")[i])
+            gamename=""
+            gamename+=Get_gamename(event.message.text.split("：")[1])
+            gamename.split("\n")
+            message = TemplateSendMessage(
+                alt_text='確認樣板',
+                template=ButtonsTemplate(
+                    title="選擇比賽",
+                    text="你想看哪個比賽?",
+                    actions=[
+                        MessageTemplateAction(
+                            label=gamename.split("\n")[0] + "VS" + gamename.split("\n")[1],
+                            text="詳細內容:"+game.split("\n")[0]
+                        )
+
+                    ]
+                )
+            )
+            line_bot_api.reply_message(event.reply_token, message)
+import os
+import requests
+from bs4 import BeautifulSoup
+import datetime
+if __name__ == "__main__":
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port)
